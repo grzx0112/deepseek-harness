@@ -14,7 +14,7 @@ import z from '@deepseek-ai/schemastery'
 import { installModelSelection, type ModelSelectionRef } from '@deepseek-ai/dsh-agent'
 import type { AgentHandle } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, type ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { SessionId, type Session, type SessionEvent } from '@deepseek-ai/dsh-session'
 import type { SessionHeader } from '@deepseek-ai/dsh-session'
 // Empty type imports carry the loader Context merge for the settlement await
@@ -188,8 +188,7 @@ class Runner {
     if (parsed === undefined) return
     switch (parsed.name) {
       case 'help':
-        this.store.set({ notice: '' })
-        this.store.pushItems(helpText().map(text => ({ kind: 'user' as const, text: `  ${text}` })))
+        await this.showHelp()
         break
       case 'exit':
         await this.exit()
@@ -213,8 +212,97 @@ class Runner {
       case 'model':
         await this.openModelPicker()
         break
+      case 'export':
+        await this.exportLog(parsed.args)
+        break
       default:
-        this.store.set({ notice: `未知命令 ${parsed.name}（/help 查看）` })
+        await this.dispatchHostCommand(line, parsed.name)
+    }
+  }
+
+  /** /help: the local table merged with every host-registered command. */
+  private async showHelp(): Promise<void> {
+    const host = this.listHostCommands()
+    this.store.set({ notice: '' })
+    this.store.pushItems(helpText(host).map(text => ({ kind: 'user' as const, text: `  ${text}` })))
+  }
+
+  /** Host command descriptors for the live agent, when the registry is mounted. */
+  private listHostCommands(): readonly { name: string; description: string }[] {
+    const commands = this.ctx.get('commands')
+    const agent = this.handle?.agent
+    if (commands === undefined || agent === undefined) return []
+    try {
+      return commands.list(agent)
+    } catch {
+      return []
+    }
+  }
+
+  /**
+   * Execute one slash line through the host command registry — the same
+   * registry the web composer dispatches through, so every host command
+   * (`/compact`, `/plan`, `/goal`, `/feedback`, `/permission`, …) works here
+   * with identical semantics, and its `command/run`/`command/done` lifecycle
+   * renders in the transcript through the projection.
+   */
+  private async dispatchHostCommand(line: string, name: string): Promise<void> {
+    const commands = this.ctx.get('commands')
+    const agent = this.handle?.agent
+    if (commands === undefined || agent === undefined) {
+      this.store.set({ notice: `未知命令 ${name}（/help 查看）` })
+      return
+    }
+    if (commands.find(agent, name) === undefined) {
+      this.store.set({ notice: `未知命令 ${name}（/help 查看）` })
+      return
+    }
+    try {
+      const execution = await commands.execute(agent, line, new AbortController().signal)
+      if (execution === undefined) {
+        this.store.set({ notice: `命令 ${name} 未能解析` })
+        return
+      }
+      if (execution.result.kind === 'error') {
+        this.store.set({ notice: `/${name} 失败：${execution.result.text}` })
+      } else if (execution.result.text !== undefined && execution.result.text !== '') {
+        this.store.set({ notice: `/${name}：${execution.result.text}` })
+      } else {
+        this.store.set({ notice: '' })
+      }
+    } catch (error: unknown) {
+      this.store.set({ notice: `/${name} 执行出错：${error instanceof Error ? error.message : String(error)}` })
+    }
+  }
+
+  /** /export: write the raw persisted log (JSONL text) beside the cwd. */
+  private async exportLog(args: string): Promise<void> {
+    const persistence = this.ctx.get('sessionPersistence')
+    const session = this.handle?.agent.session
+    if (persistence === undefined || session === undefined) {
+      this.store.set({ notice: '会话持久化未配置，无法导出' })
+      return
+    }
+    if (!persistence.supportsRawArtifacts) {
+      this.store.set({ notice: '当前持久化后端不支持原始日志导出' })
+      return
+    }
+    try {
+      await this.ctx.sessions.flush(session)
+      const artifact = await persistence.readRaw(session.id)
+      if (artifact === undefined) {
+        this.store.set({ notice: '会话尚未落盘（先发送一条消息再导出）' })
+        return
+      }
+      const target = args !== ''
+        ? args
+        : `${String(session.id).slice(0, 'session-'.length + 8)}-${new Date().toISOString().replaceAll(':', '')}.jsonl`
+      const path = await import('node:path').then(path => path.resolve(process.cwd(), target))
+      const { writeFile } = await import('node:fs/promises')
+      await writeFile(path, artifact.content, 'utf8')
+      this.store.set({ notice: `已导出 → ${path}` })
+    } catch (error: unknown) {
+      this.store.set({ notice: `导出失败：${error instanceof Error ? error.message : String(error)}` })
     }
   }
 
@@ -296,13 +384,36 @@ class Runner {
     const overlay = this.store.get().overlay
     if (overlay.kind === 'model') {
       const choice: ModelChoice | undefined = overlay.choices[overlay.cursor]
+      if (choice === undefined) return
+      // Resolve the exact model's reasoning levels; a model that offers some
+      // gets a second effort stage before the selection applies (the web
+      // picker's two-level menu), one without applies immediately.
+      const llm = this.ctx.get('llm')
+      const info = llm === undefined ? undefined : await llm.resolveModelInfo(choice.provider, choice.model).catch(() => undefined)
+      const efforts = info?.reasoning?.efforts ?? []
+      if (efforts.length === 0) {
+        this.store.set({ overlay: { kind: 'none' } })
+        this.applySelection({ provider: choice.provider, model: choice.model })
+        return
+      }
+      const current = this.selection.current
+      const cursor = Math.max(0, efforts.findIndex(effort =>
+        current?.reasoningEffort !== undefined && effort.id === current.reasoningEffort))
+      this.store.set({
+        overlay: {
+          kind: 'effort',
+          pending: { provider: choice.provider, model: choice.model },
+          choices: efforts.map(effort => ({ id: effort.id, label: effort.name ?? effort.id })),
+          cursor,
+        },
+      })
+      return
+    }
+    if (overlay.kind === 'effort') {
+      const choice = overlay.choices[overlay.cursor]
       this.store.set({ overlay: { kind: 'none' } })
       if (choice === undefined) return
-      const previous = this.selection.current
-      this.selection.current = previous?.reasoningEffort === undefined
-        ? { provider: choice.provider, model: choice.model }
-        : { provider: choice.provider, model: choice.model, reasoningEffort: previous.reasoningEffort }
-      this.store.set({ modelLabel: this.modelLabel(), notice: `已切换到 ${choice.provider} / ${choice.model}（下个回合生效）` })
+      this.applySelection({ ...overlay.pending, reasoningEffort: choice.id })
       return
     }
     if (overlay.kind === 'sessions') {
@@ -311,6 +422,18 @@ class Runner {
       if (row === undefined) return
       await this.reboot(row.id)
     }
+  }
+
+  /** Install one selection and publish its label. */
+  private applySelection(selection: { provider: string; model: string; reasoningEffort?: ReasoningEffortId }): void {
+    this.selection.current = selection.reasoningEffort === undefined
+      ? { provider: selection.provider, model: selection.model }
+      : { provider: selection.provider, model: selection.model, reasoningEffort: selection.reasoningEffort }
+    const effortLabel = this.selection.current.reasoningEffort === undefined ? '' : ` · ${String(this.selection.current.reasoningEffort)}`
+    this.store.set({
+      modelLabel: `${selection.provider} / ${selection.model}${effortLabel}`,
+      notice: `已切换到 ${selection.provider} / ${selection.model}${effortLabel}（下个回合生效）`,
+    })
   }
 
   /** Unmount the surface, persist, and request exit. */

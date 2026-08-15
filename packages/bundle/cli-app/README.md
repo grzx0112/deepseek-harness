@@ -10,13 +10,15 @@ The runner keeps one Agent alive through `ctx.agents`, projects its durable sess
 
 | Command | Effect |
 |---|---|
-| `/help` | list commands |
-| `/model` | overlay every `ctx.llm.listProviders()` × `listModels()` route; selection rewrites the agent's `ModelSelectionRef` and applies at the next step |
+| `/help` | list commands — the local table merged with every host-registered command |
+| `/model` | overlay every `ctx.llm.listProviders()` × `listModels()` route, then a second reasoning-effort stage when the exact model offers levels (the web picker's two-level menu) |
 | `/new` | dispose the agent and start a fresh session |
 | `/sessions` | overlay persisted sessions (`ctx.sessionPersistence.list()`, newest first) |
 | `/resume <id>` | resume one persisted session (`ctx.agents.resume`); a failed resume surfaces the error and boots fresh |
+| `/export [file]` | flush and write the raw persisted log (JSONL text) to a file beside the cwd |
 | `/interrupt` | cancel the running turn, keeping queued inbox work (also Ctrl+C) |
 | `/exit` | flush, dispose, and exit (also double Ctrl+C) |
+| any other `/name …` | dispatched through the host command registry (`ctx.commands.execute`) — the same registry the web composer uses, so `/compact`, `/plan`, `/goal`, `/feedback`, `/permission`, and every future host command work with identical semantics; their `command/run`/`command/done` lifecycle renders in the transcript |
 
 `dsh --profile cli [sessionId]` boots fresh or resumes the named persisted session. Enter submits a prompt; Ctrl+J inserts a newline; Up/Down walk input history on a single-line draft.
 

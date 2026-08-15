@@ -15,6 +15,14 @@ export interface ModelChoice {
   name: string | undefined
 }
 
+/** One selectable reasoning-effort row in the second /model stage. */
+export interface EffortChoice {
+  /** Opaque adapter-owned effort id passed back as `reasoningEffort`. */
+  id: import('@deepseek-ai/dsh-llm').ReasoningEffortId
+  /** Human label for the row. */
+  label: string
+}
+
 /** One row in the /sessions overlay. */
 export interface SessionRow {
   id: string
@@ -26,6 +34,7 @@ export interface SessionRow {
 export type Overlay =
   | { kind: 'none' }
   | { kind: 'model'; choices: ModelChoice[]; cursor: number }
+  | { kind: 'effort'; pending: { provider: string; model: string }; choices: EffortChoice[]; cursor: number }
   | { kind: 'sessions'; rows: SessionRow[]; cursor: number }
 
 /** Immutable snapshot the UI renders. */

@@ -52,6 +52,20 @@ function ItemView({ item }: { item: ChatItem }): React.JSX.Element {
           <Text dimColor>{item.text}</Text>
         </Box>
       )
+    case 'command-run':
+      return (
+        <Box marginTop={1}>
+          <Text color="yellow" bold>{`⌘ /${item.name}`}</Text>
+          <Text dimColor>{item.args === '' ? '' : ` ${item.args}`}</Text>
+        </Box>
+      )
+    case 'command-done':
+      return (
+        <Box>
+          <Text color={item.ok ? 'green' : 'red'} dimColor>{item.ok ? '  ✓ ' : '  ✗ '}</Text>
+          <Text dimColor>{item.text}</Text>
+        </Box>
+      )
   }
 }
 
@@ -232,7 +246,7 @@ function App({ store, actions }: { store: TuiStore; actions: TuiActions }): Reac
   const overlay = state.overlay
   useInput((input, key) => {
     if (overlay.kind !== 'none') {
-      const size = overlay.kind === 'model' ? overlay.choices.length : overlay.rows.length
+      const size = overlay.kind === 'model' || overlay.kind === 'effort' ? overlay.choices.length : overlay.rows.length
       if (key.escape) actions.cancelOverlay()
       else if (key.upArrow) actions.moveOverlay(-1, size)
       else if (key.downArrow) actions.moveOverlay(1, size)
@@ -287,6 +301,17 @@ function App({ store, actions }: { store: TuiStore; actions: TuiActions }): Reac
           }}
         />
       )}
+      {overlay.kind === 'effort' && (
+        <OverlayView
+          title={`选择推理强度 — ${overlay.pending.provider} / ${overlay.pending.model}`}
+          rows={overlay.choices}
+          cursor={overlay.cursor}
+          render={(row) => {
+            const choice = row as { id: string; label: string }
+            return <Text>{choice.label}</Text>
+          }}
+        />
+      )}
       {overlay.kind === 'sessions' && (
         <OverlayView
           title="选择会话（/resume）"
@@ -301,7 +326,7 @@ function App({ store, actions }: { store: TuiStore; actions: TuiActions }): Reac
       {state.notice !== '' && <Text color="yellow">{state.notice}</Text>}
       <Composer history={historyRef.current} active={overlay.kind === 'none' && !state.running} onSubmit={handleSubmit} />
       <Box>
-        <Text dimColor>{` ${state.modelLabel === '' ? 'dsh' : state.modelLabel} — /model 切换 · /new 新会话 · /sessions 列表 · /exit 退出`}</Text>
+        <Text dimColor>{` ${state.modelLabel === '' ? 'dsh' : state.modelLabel} — /model 切换 · /compact /plan /goal 等命令直通 · /help 全部命令 · /exit 退出`}</Text>
       </Box>
     </Box>
   )

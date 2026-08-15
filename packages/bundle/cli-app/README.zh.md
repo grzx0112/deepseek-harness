@@ -10,13 +10,15 @@ runner 通过 `ctx.agents` 常驻一个 Agent，把持久会话事件投影到�
 
 | 命令 | 作用 |
 |---|---|
-| `/help` | 列出命令 |
-| `/model` | 浮层列出全部 `ctx.llm.listProviders()` × `listModels()` 路由；选中后改写 agent 的 `ModelSelectionRef`，下个步骤生效 |
+| `/help` | 列出命令——本地命令与全部宿主注册命令合并展示 |
+| `/model` | 浮层列出全部 `ctx.llm.listProviders()` × `listModels()` 路由；所选模型提供推理强度时进入第二级选择（与 web 选择器的两级菜单一致），下个步骤生效 |
 | `/new` | 释放当前 agent，开始全新会话 |
 | `/sessions` | 浮层列出持久化会话（`ctx.sessionPersistence.list()`，最新在前） |
 | `/resume <id>` | 恢复指定持久化会话（`ctx.agents.resume`）；恢复失败会提示错误并改为新建 |
+| `/export [file]` | 落盘并把原始持久化日志（JSONL 文本）写到当前目录旁的文件 |
 | `/interrupt` | 取消当前回合，保留排队的 inbox 工作（等同 Ctrl+C） |
 | `/exit` | 落盘、释放并退出（也可双击 Ctrl+C） |
+| 其他任意 `/name …` | 经宿主命令注册表（`ctx.commands.execute`）分发——与 web 输入框同一注册表，因此 `/compact`、`/plan`、`/goal`、`/feedback`、`/permission` 及未来的宿主命令语义完全一致；其 `command/run`/`command/done` 生命周期会渲染进转录 |
 
 `dsh --profile cli [sessionId]` 新建会话启动，或恢复指定持久化会话。Enter 提交输入；Ctrl+J 换行；单行草稿下 Up/Down 翻阅输入历史。
 

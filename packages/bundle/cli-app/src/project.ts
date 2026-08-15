@@ -6,6 +6,8 @@
  */
 
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
+// Carries the `command/run` + `command/done` SessionEventMap merge.
+import type {} from '@deepseek-ai/dsh-commands/types'
 
 /** One finalized transcript row the terminal renders as history. */
 export type ChatItem =
@@ -14,6 +16,8 @@ export type ChatItem =
   | { kind: 'reasoning'; text: string }
   | { kind: 'tool-call'; name: string; args: string }
   | { kind: 'tool-result'; callId: string; text: string; isError: boolean }
+  | { kind: 'command-run'; name: string; args: string }
+  | { kind: 'command-done'; ok: boolean; text: string }
 
 /** Join an event message's text blocks; empty string when it has none. */
 function textOf(content: readonly { type: string; text?: string }[]): string {
@@ -71,6 +75,14 @@ export function itemsFromEvent(event: SessionEvent): ChatItem[] {
         isError: event.data.error !== undefined,
       }]
     }
+    case 'command/run':
+      return [{ kind: 'command-run', name: event.data.name, args: event.data.args ?? '' }]
+    case 'command/done':
+      return [{
+        kind: 'command-done',
+        ok: event.data.kind === 'success',
+        text: event.data.text ?? (event.data.kind === 'success' ? '完成' : '失败'),
+      }]
     default:
       return []
   }

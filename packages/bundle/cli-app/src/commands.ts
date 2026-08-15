@@ -31,22 +31,29 @@ export interface CommandDoc {
   description: string
 }
 
-/** Every command the terminal surface understands. */
+/** Every command the terminal surface owns locally; host commands join /help at runtime. */
 export const COMMANDS: readonly CommandDoc[] = [
-  { name: 'help', args: '', description: '列出可用命令' },
-  { name: 'model', args: '', description: '选择供应商和模型（弹列表）' },
+  { name: 'help', args: '', description: '列出可用命令（含全部宿主命令）' },
+  { name: 'model', args: '', description: '选择供应商和模型，含推理强度（弹列表）' },
   { name: 'new', args: '', description: '开始一个全新会话' },
   { name: 'sessions', args: '', description: '列出持久化会话（可选中恢复）' },
   { name: 'resume', args: '<sessionId>', description: '恢复指定会话' },
+  { name: 'export', args: '[file]', description: '导出当前会话原始日志为 JSONL 文件' },
   { name: 'interrupt', args: '', description: '中断当前回合（等同 Ctrl+C）' },
   { name: 'exit', args: '', description: '保存并退出' },
 ]
 
-/** Render the /help listing as plain text rows. */
-export function helpText(): string[] {
-  const width = Math.max(...COMMANDS.map(command => command.name.length + command.args.length + 1))
-  return COMMANDS.map((command) => {
-    const spelling = `${command.name} ${command.args}`.trimEnd()
-    return `/${spelling.padEnd(width)}  ${command.description}`
+/** Render the /help listing: local commands plus host-registry descriptors. */
+export function helpText(host: readonly { name: string; description: string }[] = []): string[] {
+  const rows = [
+    ...COMMANDS.map(command => ({ name: command.name, args: command.args, description: command.description })),
+    ...host
+      .filter(command => !COMMANDS.some(local => local.name === command.name))
+      .map(command => ({ name: command.name, args: '', description: command.description })),
+  ]
+  const width = Math.max(...rows.map(row => row.name.length + row.args.length + 1))
+  return rows.map((row) => {
+    const spelling = `${row.name} ${row.args}`.trimEnd()
+    return `/${spelling.padEnd(width)}  ${row.description}`
   })
 }
