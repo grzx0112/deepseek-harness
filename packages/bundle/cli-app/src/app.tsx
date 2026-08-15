@@ -10,7 +10,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { Box, render, Static, Text, useApp, useInput } from 'ink'
 import type { TuiActions } from './actions.ts'
-import { TuiStore } from './store.ts'
+import { TuiStore, filterOverlayRows } from './store.ts'
 import type { ChatItem } from './project.ts'
 
 /** One spinner frame sequence for the running indicator. */
@@ -213,25 +213,42 @@ function Composer(
   )
 }
 
-/** The /model and /sessions overlay list above the composer. */
+/** How many overlay rows stay visible at once. */
+const OVERLAY_VIEWPORT = 10
+
+/** The /model, /effort, and /sessions overlay list above the composer. */
 function OverlayView(
-  { title, rows, cursor, render }: {
+  { title, rows, cursor, query, render }: {
     title: string
     rows: readonly unknown[]
     cursor: number
+    query: string | undefined
     render(row: unknown, index: number): React.JSX.Element
   },
 ): React.JSX.Element {
+  // The viewport follows the cursor: keep the selection visible at either
+  // edge of the window instead of a fixed head slice.
+  const windowStart = Math.min(Math.max(0, cursor - (OVERLAY_VIEWPORT - 1)), Math.max(0, rows.length - OVERLAY_VIEWPORT))
+  const windowEnd = windowStart + OVERLAY_VIEWPORT
   return (
     <Box flexDirection="column" borderStyle="round" borderColor="yellow" paddingX={1}>
-      <Text color="yellow" bold>{title}（↑↓ 选择，Enter 确认，Esc 取消）</Text>
-      {rows.slice(0, 12).map((row, index) => (
-        <Box key={index}>
-          <Text color={index === cursor ? 'cyan' : 'gray'}>{index === cursor ? '❯ ' : '  '}</Text>
-          {render(row, index)}
-        </Box>
-      ))}
-      {rows.length > 12 && <Text dimColor>… {rows.length - 12} more</Text>}
+      <Text color="yellow" bold>{title}</Text>
+      {query !== undefined && (
+        <Text dimColor>{`筛选: ${query}${query === '' ? '（输入即筛选，如 glm / claude / 5.3）' : ''}`}</Text>
+      )}
+      {windowStart > 0 && <Text dimColor>↑ {windowStart} more</Text>}
+      {rows.slice(windowStart, windowEnd).map((row, index) => {
+        const absolute = windowStart + index
+        return (
+          <Box key={absolute}>
+            <Text color={absolute === cursor ? 'cyan' : 'gray'}>{absolute === cursor ? '❯ ' : '  '}</Text>
+            {render(row, absolute)}
+          </Box>
+        )
+      })}
+      {windowEnd < rows.length && <Text dimColor>↓ {rows.length - windowEnd} more</Text>}
+      {rows.length === 0 && <Text color="red">无匹配项</Text>}
+      <Text dimColor>↑↓ 选择 · 输入筛选 · Enter 确认 · Esc 取消</Text>
     </Box>
   )
 }
@@ -244,13 +261,25 @@ function App({ store, actions }: { store: TuiStore; actions: TuiActions }): Reac
   const [ctrlCArmed, setCtrlCArmed] = useState(false)
 
   const overlay = state.overlay
+  const modelRows = useMemo(
+    () => overlay.kind === 'model' ? filterOverlayRows(overlay.choices, overlay.query, choice => [choice.provider, choice.model, choice.name ?? '']) : [],
+    [overlay],
+  )
+  const sessionRows = useMemo(
+    () => overlay.kind === 'sessions' ? filterOverlayRows(overlay.rows, overlay.query, row => [row.id, row.label ?? '']) : [],
+    [overlay],
+  )
   useInput((input, key) => {
     if (overlay.kind !== 'none') {
-      const size = overlay.kind === 'model' || overlay.kind === 'effort' ? overlay.choices.length : overlay.rows.length
+      const size = overlay.kind === 'model' ? modelRows.length
+        : overlay.kind === 'sessions' ? sessionRows.length
+          : overlay.choices.length
       if (key.escape) actions.cancelOverlay()
       else if (key.upArrow) actions.moveOverlay(-1, size)
       else if (key.downArrow) actions.moveOverlay(1, size)
       else if (key.return) actions.confirmOverlay()
+      else if (key.backspace || key.delete) actions.overlayBackspace()
+      else if (input !== '' && !key.ctrl && !key.meta && !key.return) actions.overlayType(input)
       return
     }
     if (key.ctrl && input === 'c') {
@@ -293,8 +322,9 @@ function App({ store, actions }: { store: TuiStore; actions: TuiActions }): Reac
       {overlay.kind === 'model' && (
         <OverlayView
           title="选择模型"
-          rows={overlay.choices}
+          rows={modelRows}
           cursor={overlay.cursor}
+          query={overlay.query}
           render={(row) => {
             const choice = row as { provider: string; model: string; name?: string }
             return <Text>{`${choice.provider} / ${choice.model}${choice.name === undefined ? '' : ` — ${choice.name}`}`}</Text>
@@ -306,6 +336,7 @@ function App({ store, actions }: { store: TuiStore; actions: TuiActions }): Reac
           title={`选择推理强度 — ${overlay.pending.provider} / ${overlay.pending.model}`}
           rows={overlay.choices}
           cursor={overlay.cursor}
+          query={undefined}
           render={(row) => {
             const choice = row as { id: string; label: string }
             return <Text>{choice.label}</Text>
@@ -315,8 +346,9 @@ function App({ store, actions }: { store: TuiStore; actions: TuiActions }): Reac
       {overlay.kind === 'sessions' && (
         <OverlayView
           title="选择会话（/resume）"
-          rows={overlay.rows}
+          rows={sessionRows}
           cursor={overlay.cursor}
+          query={overlay.query}
           render={(row) => {
             const entry = row as { id: string; label?: string }
             return <Text>{`${entry.id}${entry.label === undefined ? '' : ` — ${entry.label}`}`}</Text>

@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { COMMANDS, helpText, parseCommand } from '../src/commands.ts'
-import { TuiStore } from '../src/store.ts'
+import { TuiStore, filterOverlayRows } from '../src/store.ts'
 
 describe('parseCommand', () => {
   it('parses name and args', () => {
@@ -23,6 +23,32 @@ describe('helpText', () => {
     const rows = helpText()
     expect(rows).toHaveLength(COMMANDS.length)
     expect(rows.some(row => row.includes('/model'))).toBe(true)
+  })
+})
+
+describe('filterOverlayRows', () => {
+  const rows = [
+    { provider: 'glm', model: 'glm-5.3', name: 'GLM-5.3' },
+    { provider: 'opencode', model: 'claude-sonnet-5', name: undefined },
+    { provider: 'opencode', model: 'glm-5.2', name: undefined },
+  ]
+  const fields = (row: { provider: string; model: string; name?: string }) => [row.provider, row.model, row.name ?? '']
+
+  it('passes everything through on an empty query', () => {
+    expect(filterOverlayRows(rows, '', fields)).toHaveLength(3)
+    expect(filterOverlayRows(rows, '   ', fields)).toHaveLength(3)
+  })
+
+  it('matches case-insensitively across provider, model, and name', () => {
+    expect(filterOverlayRows(rows, 'GLM', fields)).toHaveLength(2)
+    expect(filterOverlayRows(rows, 'claude', fields)).toHaveLength(1)
+    expect(filterOverlayRows(rows, 'GLM-5.3', fields)).toHaveLength(1)
+  })
+
+  it('requires every whitespace token to match somewhere', () => {
+    expect(filterOverlayRows(rows, 'opencode glm', fields)).toHaveLength(1)
+    expect(filterOverlayRows(rows, 'opencode claude', fields)).toHaveLength(1)
+    expect(filterOverlayRows(rows, 'opencode nothing', fields)).toHaveLength(0)
   })
 })
 

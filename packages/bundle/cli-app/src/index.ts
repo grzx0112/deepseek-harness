@@ -25,8 +25,8 @@ import type { TuiActions } from './actions.ts'
 import { mountTui } from './app.tsx'
 import { helpText, parseCommand } from './commands.ts'
 import { appendChunk, itemsFromEvent, itemsFromLog } from './project.ts'
-import { TuiStore } from './store.ts'
-import type { ModelChoice, SessionRow } from './store.ts'
+import { TuiStore, filterOverlayRows } from './store.ts'
+import type { ModelChoice, Overlay, SessionRow } from './store.ts'
 
 /** Stable Cordis plugin name. */
 export const name = 'cli-runner'
@@ -99,6 +99,8 @@ class Runner {
       exit: () => this.exit(),
       cancelOverlay: () => { this.store.set({ overlay: { kind: 'none' } }) },
       moveOverlay: (delta, size) => { this.moveOverlay(delta, size) },
+      overlayType: (ch) => { this.overlayType(ch) },
+      overlayBackspace: () => { this.overlayBackspace() },
       confirmOverlay: () => { void this.confirmOverlay() },
     }
   }
@@ -344,7 +346,7 @@ class Runner {
     const current = this.selection.current
     const cursor = Math.max(0, choices.findIndex(choice =>
       current !== undefined && choice.provider === current.provider && choice.model === current.model))
-    this.store.set({ overlay: { kind: 'model', choices, cursor } })
+    this.store.set({ overlay: { kind: 'model', choices, cursor, query: '' } })
   }
 
   /** List persisted sessions and open the /sessions overlay. */
@@ -369,7 +371,31 @@ class Runner {
       this.store.set({ notice: '没有持久化会话' })
       return
     }
-    this.store.set({ overlay: { kind: 'sessions', rows, cursor: 0 } })
+    this.store.set({ overlay: { kind: 'sessions', rows, cursor: 0, query: '' } })
+  }
+
+  /** The model rows the current query leaves visible. */
+  private visibleModels(overlay: Extract<Overlay, { kind: 'model' }>): ModelChoice[] {
+    return filterOverlayRows(overlay.choices, overlay.query, choice => [choice.provider, choice.model, choice.name ?? ''])
+  }
+
+  /** The session rows the current query leaves visible. */
+  private visibleSessions(overlay: Extract<Overlay, { kind: 'sessions' }>): SessionRow[] {
+    return filterOverlayRows(overlay.rows, overlay.query, row => [row.id, row.label ?? ''])
+  }
+
+  /** Append one typed character to the query overlay's filter. */
+  private overlayType(ch: string): void {
+    const overlay = this.store.get().overlay
+    if (overlay.kind !== 'model' && overlay.kind !== 'sessions') return
+    this.store.set({ overlay: { ...overlay, query: overlay.query + ch, cursor: 0 } })
+  }
+
+  /** Delete the last character of the query overlay's filter. */
+  private overlayBackspace(): void {
+    const overlay = this.store.get().overlay
+    if (overlay.kind !== 'model' && overlay.kind !== 'sessions') return
+    this.store.set({ overlay: { ...overlay, query: overlay.query.slice(0, -1), cursor: 0 } })
   }
 
   /** Move the open overlay cursor, clamped to its rows. */
@@ -383,7 +409,7 @@ class Runner {
   private async confirmOverlay(): Promise<void> {
     const overlay = this.store.get().overlay
     if (overlay.kind === 'model') {
-      const choice: ModelChoice | undefined = overlay.choices[overlay.cursor]
+      const choice: ModelChoice | undefined = this.visibleModels(overlay)[overlay.cursor]
       if (choice === undefined) return
       // Resolve the exact model's reasoning levels; a model that offers some
       // gets a second effort stage before the selection applies (the web
@@ -417,7 +443,7 @@ class Runner {
       return
     }
     if (overlay.kind === 'sessions') {
-      const row: SessionRow | undefined = overlay.rows[overlay.cursor]
+      const row: SessionRow | undefined = this.visibleSessions(overlay)[overlay.cursor]
       this.store.set({ overlay: { kind: 'none' } })
       if (row === undefined) return
       await this.reboot(row.id)

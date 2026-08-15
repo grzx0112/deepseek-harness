@@ -33,9 +33,26 @@ export interface SessionRow {
 /** Which modal overlay (if any) sits above the composer. */
 export type Overlay =
   | { kind: 'none' }
-  | { kind: 'model'; choices: ModelChoice[]; cursor: number }
+  | { kind: 'model'; choices: ModelChoice[]; cursor: number; query: string }
   | { kind: 'effort'; pending: { provider: string; model: string }; choices: EffortChoice[]; cursor: number }
-  | { kind: 'sessions'; rows: SessionRow[]; cursor: number }
+  | { kind: 'sessions'; rows: SessionRow[]; cursor: number; query: string }
+
+/**
+ * Case-insensitive substring filter for overlay rows: a row matches when any
+ * of its searchable fields contains every whitespace-separated query token.
+ * @param rows - the overlay's full row list.
+ * @param query - the typed filter text.
+ * @param fields - how to read one row's searchable text.
+ * @returns the matching rows, original order preserved.
+ */
+export function filterOverlayRows<T>(rows: readonly T[], query: string, fields: (row: T) => readonly string[]): T[] {
+  const tokens = query.trim().toLowerCase().split(/\s+/).filter(token => token !== '')
+  if (tokens.length === 0) return [...rows]
+  return rows.filter((row) => {
+    const haystacks = fields(row).map(field => field.toLowerCase())
+    return tokens.every(token => haystacks.some(haystack => haystack.includes(token)))
+  })
+}
 
 /** Immutable snapshot the UI renders. */
 export interface TuiState {

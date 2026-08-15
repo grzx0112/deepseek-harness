@@ -18,6 +18,10 @@ export interface TuiActions {
   cancelOverlay(): void
   /** Move the open overlay cursor by `delta`, clamped to `[0, size)`. */
   moveOverlay(delta: number, size: number): void
+  /** Append one typed character to the open overlay's filter query. */
+  overlayType(ch: string): void
+  /** Delete the last character of the open overlay's filter query. */
+  overlayBackspace(): void
   /** Act on the overlay row under its cursor. */
   confirmOverlay(): void
 }
