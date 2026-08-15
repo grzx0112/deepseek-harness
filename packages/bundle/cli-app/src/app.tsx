@@ -90,71 +90,98 @@ function Composer(
   const draftRef = useRef('')
   const activeRef = useRef(active)
   activeRef.current = active
-
-  useInput((input, key) => {
-    if (!activeRef.current) return
-    setState((prev) => {
-      const { text, cursor } = prev
-      if (key.return) {
-        const trimmed = text.trim()
-        if (trimmed !== '') {
-          onSubmit(trimmed)
-          setHistoryIndex(null)
-        }
-        return { text: '', cursor: 0 }
-      }
-      if (key.ctrl && input === 'j') {
-        return insert(text, cursor, '\n')
-      }
-      if (key.backspace || key.delete) {
-        if (cursor === 0) return prev
-        return { text: text.slice(0, cursor - 1) + text.slice(cursor), cursor: cursor - 1 }
-      }
-      if (key.leftArrow) return { ...prev, cursor: Math.max(0, cursor - 1) }
-      if (key.rightArrow) return { ...prev, cursor: Math.min(text.length, cursor + 1) }
-      if (key.upArrow) {
-        if (text.includes('\n')) {
-          const before = text.lastIndexOf('\n', cursor - 1)
-          return { ...prev, cursor: before + 1 }
-        }
-        const next = historyIndex === null ? history.length - 1 : Math.max(0, historyIndex - 1)
-        const entry = history[next]
-        if (entry === undefined) return prev
-        setHistoryIndex(next)
-        return { text: entry, cursor: entry.length }
-      }
-      if (key.downArrow) {
-        if (text.includes('\n')) {
-          const after = text.indexOf('\n', cursor)
-          return { ...prev, cursor: after === -1 ? text.length : after + 1 }
-        }
-        if (historyIndex === null) return prev
-        const next = historyIndex + 1
-        if (next >= history.length) {
-          setHistoryIndex(null)
-          return { text: draftRef.current, cursor: draftRef.current.length }
-        }
-        const entry = history[next]
-        if (entry === undefined) return prev
-        setHistoryIndex(next)
-        return { text: entry, cursor: entry.length }
-      }
-      if (key.ctrl && input === 'a') {
-        const before = text.lastIndexOf('\n', cursor - 1)
-        return { ...prev, cursor: before + 1 }
-      }
-      if (key.ctrl && input === 'e') {
-        const after = text.indexOf('\n', cursor)
-        return { ...prev, cursor: after === -1 ? text.length : after }
-      }
-      if (input !== '' && !key.ctrl && !key.meta) return insert(text, cursor, input)
-      return prev
-    })
-  })
+  // The editor state the key handler reads: a ref, so the handler never
+  // depends on a stale closure and never needs the setState updater (whose
+  // render-phase execution forbids the side effects below).
+  const stateRef = useRef(state)
+  stateRef.current = state
+  const historyIndexRef = useRef(historyIndex)
+  historyIndexRef.current = historyIndex
 
   useEffect(() => {
     // Keep the pre-history draft around so Down can restore it.
     if (historyIndex === null) draftRef.current = state.text
+  })
+
+  useInput((input, key) => {
+    if (!activeRef.current) return
+    const { text, cursor } = stateRef.current
+    const apply = (next: EditorState) => {
+      stateRef.current = next
+      setState(next)
+    }
+    if (key.return) {
+      const trimmed = text.trim()
+      if (trimmed !== '') {
+        setHistoryIndex(null)
+        onSubmit(trimmed)
+      }
+      apply({ text: '', cursor: 0 })
+      return
+    }
+    if (key.ctrl && input === 'j') {
+      apply(insert(text, cursor, '\n'))
+      return
+    }
+    if (key.backspace || key.delete) {
+      if (cursor === 0) return
+      apply({ text: text.slice(0, cursor - 1) + text.slice(cursor), cursor: cursor - 1 })
+      return
+    }
+    if (key.leftArrow) {
+      apply({ text, cursor: Math.max(0, cursor - 1) })
+      return
+    }
+    if (key.rightArrow) {
+      apply({ text, cursor: Math.min(text.length, cursor + 1) })
+      return
+    }
+    if (key.upArrow) {
+      if (text.includes('\n')) {
+        const before = text.lastIndexOf('\n', cursor - 1)
+        apply({ text, cursor: before + 1 })
+        return
+      }
+      const next = historyIndexRef.current === null ? history.length - 1 : Math.max(0, historyIndexRef.current - 1)
+      const entry = history[next]
+      if (entry === undefined) return
+      setHistoryIndex(next)
+      apply({ text: entry, cursor: entry.length })
+      return
+    }
+    if (key.downArrow) {
+      if (text.includes('\n')) {
+        const after = text.indexOf('\n', cursor)
+        apply({ text, cursor: after === -1 ? text.length : after + 1 })
+        return
+      }
+      const index = historyIndexRef.current
+      if (index === null) return
+      const next = index + 1
+      if (next >= history.length) {
+        setHistoryIndex(null)
+        apply({ text: draftRef.current, cursor: draftRef.current.length })
+        return
+      }
+      const entry = history[next]
+      if (entry === undefined) return
+      setHistoryIndex(next)
+      apply({ text: entry, cursor: entry.length })
+      return
+    }
+    if (key.ctrl && input === 'a') {
+      const before = text.lastIndexOf('\n', cursor - 1)
+      apply({ text, cursor: before + 1 })
+      return
+    }
+    if (key.ctrl && input === 'e') {
+      const after = text.indexOf('\n', cursor)
+      apply({ text, cursor: after === -1 ? text.length : after })
+      return
+    }
+    if (input !== '' && !key.ctrl && !key.meta) {
+      apply(insert(text, cursor, input))
+    }
   })
 
   const before = state.text.slice(0, state.cursor)
