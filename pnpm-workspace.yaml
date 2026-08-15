@@ -70,3 +70,8 @@ minimumReleaseAgeExclude:
 
 patchedDependencies:
   node-pty@1.1.0: patches/node-pty@1.1.0.patch
+
+# pnpm 11 otherwise runs a surprise `pnpm install` before every script when it
+# thinks deps are stale (verifyDepsBeforeRun) — with concurrent sessions that
+# rewrote node_modules mid-run. Run installs explicitly instead.
+verifyDepsBeforeRun: false
