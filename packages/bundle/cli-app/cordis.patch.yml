@@ -1,0 +1,37 @@
+# The dsh-cli-app bundle patch: an interactive single-session terminal UI
+# directly over dsh-base. It mounts no Host, HTTP server, Web runtime, or
+# browser plugin. The base layer's agent-plane rows stay enabled: the TUI is
+# single-session and composes its agent process-wide (the reason dsh-base
+# keeps them). An ordinary provider plugin injects `cmdlineArgs` and provides
+# `cliStartup`; the runner keeps one Agent alive, streams its session events
+# into an Ink terminal UI, and exits through the launcher's appExit hook.
+
+- id: system-prompt
+  config:
+    persona: >-
+      You are a coding agent powered by the {{model}} model. Your working directory is {{cwd}}.
+
+# The shared module-reload HMR row stays off; the launcher's watch-only
+# fallback still keeps the user patch layers live across the session.
+- id: hmr
+  disabled: true
+
+- id: tools
+  config:
+    # Keep the same temporary process-wide Code Mode opt-in as the Web surface.
+    mode: !!js process.env.DSH_TOOLS_MODE
+
+- insert:
+    # Code Mode is a core execution capability, not a Web component.
+    - id: code-runtime
+      name: '@deepseek-ai/dsh-code-runtime-worker-thread'
+
+    - id: cli-startup
+      name: '@deepseek-ai/dsh-cli-app/startup'
+
+    # Reads its startup values from the ordinary cliStartup provider.
+    - id: cli-runner
+      name: '@deepseek-ai/dsh-cli-app'
+      inject: [cliStartup]
+      config:
+        resumeSessionId: !!js ctx.cliStartup.resumeSessionId ?? undefined
