@@ -27,10 +27,10 @@ describe('helpText', () => {
 })
 
 describe('filterOverlayRows', () => {
-  const rows = [
+  const rows: { provider: string; model: string; name?: string }[] = [
     { provider: 'glm', model: 'glm-5.3', name: 'GLM-5.3' },
-    { provider: 'opencode', model: 'claude-sonnet-5', name: undefined },
-    { provider: 'opencode', model: 'glm-5.2', name: undefined },
+    { provider: 'opencode', model: 'claude-sonnet-5' },
+    { provider: 'opencode', model: 'glm-5.2' },
   ]
   const fields = (row: { provider: string; model: string; name?: string }) => [row.provider, row.model, row.name ?? '']
 
