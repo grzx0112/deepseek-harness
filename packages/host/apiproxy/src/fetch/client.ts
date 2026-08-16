@@ -38,6 +38,7 @@ import {
   workspaceInsertBeforeValueSchema,
   workspaceInsertSessionBeforeValueSchema,
   workspaceListValueSchema,
+  workspaceBranchValueSchema,
   workspaceRenameValueSchema,
 } from '../api/workspace.schema.ts'
 import { skillListValueSchema } from '../api/skills.schema.ts'
@@ -114,6 +115,7 @@ export interface IApiClient {
   }
   workspace: {
     list(payload: RequestPayload<'workspace.list'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'workspace.list'>>>
+    branch(payload: RequestPayload<'workspace.branch'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'workspace.branch'>>>
     create(payload: RequestPayload<'workspace.create'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'workspace.create'>>>
     rename(payload: RequestPayload<'workspace.rename'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'workspace.rename'>>>
     delete(payload: RequestPayload<'workspace.delete'>, signal?: AbortSignal): Promise<RpcResponse<ResponseValue<'workspace.delete'>>>
@@ -192,6 +194,7 @@ const UNARY_VALUE_SCHEMAS: { [K in keyof RpcMethodMap]: z.ZodType<Wire<ResponseV
   'host.createDirectory': hostCreateDirectoryValueSchema,
   'host.openPath': hostOpenPathValueSchema,
   'workspace.list': workspaceListValueSchema,
+  'workspace.branch': workspaceBranchValueSchema,
   'workspace.create': workspaceCreateValueSchema,
   'workspace.rename': workspaceRenameValueSchema,
   'workspace.delete': workspaceDeleteValueSchema,
@@ -445,6 +448,7 @@ export abstract class AbstractApiClient implements IApiClient {
 
   readonly workspace: IApiClient['workspace'] = {
     list: (payload, signal) => this.callUnary('workspace.list', payload, signal),
+    branch: (payload, signal) => this.callUnary('workspace.branch', payload, signal),
     create: (payload, signal) => this.callUnary('workspace.create', payload, signal),
     rename: (payload, signal) => this.callUnary('workspace.rename', payload, signal),
     delete: (payload, signal) => this.callUnary('workspace.delete', payload, signal),

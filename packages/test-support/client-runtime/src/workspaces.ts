@@ -163,6 +163,13 @@ export class TestWorkspaces implements IWorkspaces {
     return { workspaceId, title, path: `/${title}`, sessionIds: [] } as unknown as WorkspaceView
   }
 
+  async branch(workspaceId: WorkspaceId): Promise<{ branch?: string; detachedCommit?: string }> {
+    this.calls.push({ method: 'branch', args: [workspaceId] })
+    const stub = this.stubs.get('branch')
+    if (stub !== undefined) return await (stub(workspaceId) as Promise<{ branch?: string; detachedCommit?: string }>)
+    return { branch: 'test-branch' }
+  }
+
   /**
    * Delete a Workspace (recorded; default no-op).
    * @param workspaceId - target workspace.

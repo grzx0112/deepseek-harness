@@ -164,6 +164,9 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
       async list(request) {
         return { rpcId: request.rpcId, result: { ok: true, value: { items: [], archivedSessionIds: [] } } }
       },
+      async branch(request) {
+        return { rpcId: request.rpcId, result: { ok: true, value: { branch: 'main' } } }
+      },
       async create(request) {
         return {
           rpcId: request.rpcId,

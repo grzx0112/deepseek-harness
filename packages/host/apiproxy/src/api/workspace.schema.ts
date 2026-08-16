@@ -31,6 +31,17 @@ export const workspaceListValueSchema = z.object({
   archivedSessionIds: z.array(sessionIdSchema),
 }) satisfies z.ZodType<Wire<ResponseValue<'workspace.list'>>>
 
+/** workspace.branch request payload. */
+export const workspaceBranchRequestSchema = z.object({
+  workspaceId: workspaceIdSchema,
+}) satisfies z.ZodType<Wire<RequestPayload<'workspace.branch'>>>
+
+/** workspace.branch response value. */
+export const workspaceBranchValueSchema = z.object({
+  branch: z.string().optional(),
+  detachedCommit: z.string().optional(),
+}) satisfies z.ZodType<Wire<ResponseValue<'workspace.branch'>>>
+
 /** workspace.create request payload: the existing directory to adopt. */
 export const workspaceCreateRequestSchema = z.object({
   path: z.string(),

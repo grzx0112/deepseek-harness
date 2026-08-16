@@ -114,6 +114,11 @@ export type WorkspaceBrowserInjected = DirectoryPickingInjected & {
   forkSession: (sessionId: SessionId) => void
   /** Rename a Host Workspace (rejects on name conflict; resolves on durability). */
   renameWorkspace: (workspaceId: WorkspaceId, title: string) => Promise<void>
+  /**
+   * Probe one Workspace's live git state for the branch chip; both fields
+   * absent means "not a repository". Display-only; failures reject.
+   */
+  probeWorkspaceBranch: (workspaceId: WorkspaceId) => Promise<{ branch?: string; detachedCommit?: string }>
   /** Delete only a Host Workspace registration; directory and Session logs remain. */
   deleteWorkspace: (workspaceId: WorkspaceId) => Promise<void>
   /**

@@ -354,3 +354,20 @@
     transition: none;
   }
 }
+
+/* Branch chip beside a workspace title: the live git branch (or detached
+   short sha) the sidebar surfaces so the current line of work is visible. */
+.branchChip {
+  flex: none;
+  max-width: 9em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}

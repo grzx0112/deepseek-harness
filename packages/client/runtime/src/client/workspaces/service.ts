@@ -262,6 +262,18 @@ export class WorkspaceRuntime implements IWorkspaces {
   }
 
   /**
+   * Probe one Workspace's live git branch (display-only; never touches the
+   * list mirror).
+   * @param workspaceId - target workspace.
+   * @returns the branch probe result.
+   */
+  async branch(workspaceId: WorkspaceId): Promise<{ branch?: string; detachedCommit?: string }> {
+    const result = await this.manager.branch(workspaceId)
+    if (!result.ok) throw new Error(`workspace branch probe failed: ${result.error.code}: ${result.error.message}`)
+    return result.value
+  }
+
+  /**
    * Delete one Workspace registration. Sessions, session logs, and the
    * directory remain Host-owned outside this operation.
    * @param workspaceId - target workspace.

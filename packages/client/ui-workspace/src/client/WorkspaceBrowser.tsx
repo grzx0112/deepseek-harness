@@ -219,6 +219,8 @@ type SessionTreeProps = Pick<
   | 'insertWorkspaceBefore' | 'insertSessionBefore' | 't'
 > & {
   workspaces: readonly WorkspaceView[]
+  /** Live git branch (or detached short sha) label by Workspace id; absent renders no chip. */
+  branchByWorkspace: Readonly<Record<string, string>>
   /** Explicit persisted zero-or-five-session state by Workspace group. */
   groupExpansion: Readonly<Record<string, boolean>>
   /** Persist one Workspace group's zero-or-five-session state. */
@@ -247,7 +249,7 @@ type SessionTreeProps = Pick<
 
 /** The scrolling session tree; unmounting drops the sessions subscription and expand-all state. */
 function SessionTree({
-  useSessions, startSession, open, forkSession, workspaces, archivedSessionIds,
+  useSessions, startSession, open, forkSession, workspaces, branchByWorkspace, archivedSessionIds,
   onRenameRequest, onDeleteRequest, onSessionRename, onSessionArchive,
   insertWorkspaceBefore, insertSessionBefore, orderBy,
   groupExpansion, setGroupExpanded,
@@ -450,6 +452,7 @@ function SessionTree({
             >
               <ProjectRowItem
                 group={group}
+                branch={group.workspaceId === undefined ? undefined : branchByWorkspace[group.workspaceId]}
                 t={t}
                 onToggle={() => {
                   if (group.expanded) {
@@ -750,6 +753,7 @@ export function WorkspaceBrowser({
   renameSession,
   forkSession,
   renameWorkspace,
+  probeWorkspaceBranch,
   deleteWorkspace,
   insertWorkspaceBefore,
   archiveSession,
@@ -764,6 +768,29 @@ export function WorkspaceBrowser({
   const workspaces = useWorkspaces(state => state.items)
   const workspacePhase = useWorkspaces(state => state.phase)
   const archivedSessionIds = useWorkspaces(state => state.archivedSessionIds)
+
+  // Branch chips: one best-effort probe per workspace whenever the workspace
+  // roster settles (a switch lands on the next refresh). Failure keeps the
+  // previous answer; absent fields render no chip.
+  const [branchByWorkspace, setBranchByWorkspace] = useState<Record<string, string>>({})
+  const workspaceKey = workspaces.map(workspace => workspace.workspaceId).join(',')
+  useEffect(() => {
+    if (workspacePhase !== 'ready') return
+    const ids = workspaceKey.split(',').filter(id => id !== '')
+    let cancelled = false
+    for (const workspaceId of ids) {
+      void probeWorkspaceBranch(workspaceId as WorkspaceId).then(
+        (info) => {
+          if (cancelled) return
+          const label = info.branch ?? info.detachedCommit
+          if (label === undefined) return
+          setBranchByWorkspace(previous => ({ ...previous, [workspaceId]: label }))
+        },
+        () => { /* probe failure keeps the previous chip; nothing to surface */ },
+      )
+    }
+    return () => { cancelled = true }
+  }, [workspacePhase, workspaceKey, probeWorkspaceBranch])
   // Live occupancy of this surface's directory-flow hole (the same source the
   // flow reads): a composition without a picking affordance can add nothing.
   const directoryFlowAvailable = useDirectoryFlow(occupied => occupied)
@@ -1140,6 +1167,7 @@ export function WorkspaceBrowser({
                 onSessionArchive={onSessionArchive}
                 forkSession={forkSession}
                 workspaces={workspaces}
+                branchByWorkspace={branchByWorkspace}
                 groupExpansion={groupExpansion}
                 setGroupExpanded={actions.setGroupExpanded}
                 sessionOrderByAccount={sessionOrderByAccount}

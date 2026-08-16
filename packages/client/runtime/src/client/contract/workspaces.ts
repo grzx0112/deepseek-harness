@@ -66,6 +66,14 @@ export interface IWorkspaces {
    */
   rename(workspaceId: WorkspaceId, title: string): Promise<WorkspaceView>
   /**
+   * Probe one Workspace's live git state (display-only; both fields absent
+   * means "not a repository", `detachedCommit` replaces an absent `branch`
+   * on detached HEAD).
+   * @param workspaceId - target workspace.
+   * @returns the branch probe result.
+   */
+  branch(workspaceId: WorkspaceId): Promise<{ branch?: string; detachedCommit?: string }>
+  /**
    * Delete a Workspace (its sessions fall back to the unaccounted group).
    * @param workspaceId - target workspace.
    */

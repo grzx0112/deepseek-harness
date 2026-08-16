@@ -211,6 +211,7 @@ export class FakeApiClient implements IApiClient {
         : response
     )) as ReturnType<IApiClient['workspace']['list']>),
     create: (payload: unknown) => this.record('workspace.create', payload, this.onWorkspaceCreate(payload)),
+    branch: (payload: unknown) => this.record('workspace.branch', payload, Promise.resolve(ok({ branch: 'fk-branch' }))),
     rename: (payload: unknown) => this.record('workspace.rename', payload, this.onWorkspaceRename(payload)),
     delete: (payload: unknown) => this.record('workspace.delete', payload, this.onWorkspaceDelete(payload)),
     insertBefore: (payload: unknown) =>

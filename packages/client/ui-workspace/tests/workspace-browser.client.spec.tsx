@@ -74,6 +74,7 @@ function mount(overrides: Partial<WorkspaceBrowserProps> = {}) {
     renameSession: vi.fn(async () => {}),
     forkSession: vi.fn(),
     renameWorkspace: vi.fn(async () => {}),
+    probeWorkspaceBranch: vi.fn(async () => ({ branch: 'main' })),
     deleteWorkspace: vi.fn(async () => {}),
     archiveSession: vi.fn(async () => {}),
     insertWorkspaceBefore: vi.fn(async () => {}),

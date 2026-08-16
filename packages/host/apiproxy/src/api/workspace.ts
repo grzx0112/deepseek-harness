@@ -35,6 +35,14 @@ export interface WorkspaceView {
   updatedAt: string
 }
 
+/** Live VCS probe result for one workspace directory. */
+export interface WorkspaceBranchInfo {
+  /** Current git branch name; absent when not a repo or on detached HEAD. */
+  branch?: string
+  /** Short commit id reported when `branch` is absent because HEAD is detached. */
+  detachedCommit?: string
+}
+
 /** Workspace-domain unary methods (the map keys workspace.* of RpcMethodMap). */
 export interface WorkspaceApi {
   /**
@@ -44,6 +52,15 @@ export interface WorkspaceApi {
    * workspace's `sessionIds` account; grouping surfaces hide them.
    */
   list(request: RpcRequest<{}>): Promise<RpcResponse<{ items: WorkspaceView[]; archivedSessionIds: SessionId[] }>>
+
+  /**
+   * Probe one workspace's live git state (uncached, best-effort): the checked
+   * out branch, or the short commit id on detached HEAD. A directory outside
+   * any git repository resolves with both fields `undefined` rather than an
+   * error — "no repository" is an answer, not a failure. An unknown id fails
+   * with `workspace-not-found`.
+   */
+  branch(request: RpcRequest<{ workspaceId: WorkspaceId }>): Promise<RpcResponse<WorkspaceBranchInfo>>
 
   /**
    * Creates (or idempotently resolves) a workspace over an EXISTING directory

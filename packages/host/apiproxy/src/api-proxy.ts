@@ -3,6 +3,7 @@
  * narrow RpcRequest<P> and echoes request.rpcId on the RpcResponse<T>.
  */
 
+import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { mkdir, stat } from 'node:fs/promises'
 import { dirname } from 'node:path'
@@ -40,7 +41,7 @@ import type {
   ModelCatalogFailure, ModelProviderGroup,
   ModelReasoning, MuxFrame, PromptContentPart, QuestionResponsePayload, SessionListMetadata, SessionProjectionsBlock, SessionSearchItem,
   QueuedInboxItem, SessionSummary, SettingsNamespaceView, SubagentAddress, JobView, ToolEventView,
-  WorkspaceId, WorkspaceView,
+  WorkspaceBranchInfo, WorkspaceId, WorkspaceView,
 } from './api/index.ts'
 import {
   DEFAULT_SESSION_LOG_COMPRESSION_LEVEL,
@@ -1070,6 +1071,30 @@ function workspaceNotFound<T>(request: RpcRequest<unknown>, workspaceId: string)
     message: `workspace "${workspaceId}" not found`,
     details: { workspaceId },
   })
+}
+
+/**
+ * Best-effort live git probe of one workspace directory: the checked-out
+ * branch, or the short commit id on detached HEAD. "Not a repository",
+ * missing git, and probe timeouts all resolve with both fields absent —
+ * "no answer" is a valid display state, not an error.
+ * @param path - the workspace's canonical directory.
+ * @returns the branch probe result.
+ */
+function probeGitBranch(path: string): Promise<WorkspaceBranchInfo> {
+  const run = (args: readonly string[]) => new Promise<string>((resolve, reject) => {
+    execFile('git', ['-C', path, ...args], { timeout: 3000, windowsHide: true }, (error, stdout) => {
+      if (error === null) resolve(stdout.toString().trim())
+      else reject(error)
+    })
+  })
+  return run(['rev-parse', '--abbrev-ref', 'HEAD'])
+    .then(async (branch) => {
+      if (branch !== 'HEAD') return { branch }
+      const detachedCommit = await run(['rev-parse', '--short', 'HEAD']).catch(() => undefined)
+      return detachedCommit === undefined || detachedCommit === '' ? {} : { detachedCommit }
+    })
+    .catch(() => ({}))
 }
 
 /** Wire projection of one workspace entity (the workspace.* value row). */
@@ -2805,6 +2830,16 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
           items: ctx.workspaceRegistry.list().map(workspaceView),
           archivedSessionIds: [...ctx.workspaceRegistry.archivedSessionIds],
         }))
+      },
+
+      async branch(request) {
+        const { workspaceId } = request.payload
+        const workspace = ctx.workspaceRegistry.get(brandWorkspaceId(workspaceId))
+        if (workspace === undefined) return workspaceNotFound(request, workspaceId)
+        // Uncached, best-effort git probe. "Not a repository" and a detached
+        // HEAD are answers, not failures; only an unknown workspace errors.
+        const info = await probeGitBranch(workspace.path)
+        return ok(request, info)
       },
 
       async create(request) {

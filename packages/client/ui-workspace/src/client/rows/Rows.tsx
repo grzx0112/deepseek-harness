@@ -107,8 +107,10 @@ function rowHalf(e: { clientY: number; currentTarget: HTMLElement }): 'before' |
  * @param props.t - the browser root's locale seat.
  * @returns the row element.
  */
-export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, t }: {
+export function ProjectRowItem({ group, branch, onToggle, onCreate, actions, drag, t }: {
   group: GroupNode
+  /** Live git branch (or detached short sha) chip label; absent renders no chip. */
+  branch?: string | undefined
   onToggle: () => void
   onCreate: () => void
   /** Real-Workspace actions; absent for the ungrouped bucket (no menu shown). */
@@ -150,6 +152,9 @@ export function ProjectRowItem({ group, onToggle, onCreate, actions, drag, t }: 
       </span>
       <span className={css.projectText}>
         <span className={css.title}>{label}</span>
+        {branch !== undefined && (
+          <span className={css.branchChip} title={branch}>{branch}</span>
+        )}
       </span>
       <span className={css.rowActions}>
         {actions !== undefined && (

@@ -3,6 +3,7 @@
 import type {
   HostFrame, IApiClient, RpcError, RpcRequest, RpcResult, SessionId, WorkspaceId, WorkspaceView,
 } from '@deepseek-ai/dsh-api-remotes/client'
+import type { WorkspaceBranchInfo } from '@deepseek-ai/dsh-host-apiproxy/api'
 import { transportError } from '@deepseek-ai/dsh-host-apiproxy/api'
 import { Notifier } from '../sessions/notifier.ts'
 import { Workspace, type WorkspaceCreateInput } from './workspace.ts'
@@ -145,6 +146,19 @@ export class WorkspaceManager {
   async rename(workspaceId: WorkspaceId, title: string): Promise<RpcResult<{ workspace: WorkspaceView }>> {
     const { result } = await this.api.workspace.rename({ workspaceId, title })
     if (result.ok) this.upsert(result.value.workspace)
+    return result
+  }
+
+  /**
+   * Probe one Workspace's live git state (uncached host read; both fields
+   * absent means "not a repository"; `detachedCommit` replaces an absent
+   * `branch` on detached HEAD). No list state changes — the answer is
+   * display-only, so nothing here joins the mirror.
+   * @param workspaceId - target workspace.
+   * @returns the wire result.
+   */
+  async branch(workspaceId: WorkspaceId): Promise<RpcResult<WorkspaceBranchInfo>> {
+    const { result } = await this.api.workspace.branch({ workspaceId })
     return result
   }
 
